@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-
+/*
+links to consider:
+https://raminaji.wordpress.com/tree-bitmap/
+*/
 #define WORD_SIZE 32 // assuming 32-bit machine
 
 typedef struct TreeNode {
