@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 struct TABLEENTRY{
 	uint32_t ip;
-	char len;
-	char port;
+	uint8_t len;
+	uint8_t port;
 };
 
 void read_table(char *str,unsigned int *ip,int *len,unsigned int *nexthop){
