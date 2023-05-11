@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "table.c"
+#include "util.c"
+
+
+int numberOfNodes = 0;
 
 typedef struct TreeNode {
     uint16_t child_exists;
@@ -11,6 +15,7 @@ typedef struct TreeNode {
 } TreeNode;
 
 void setupNode(TreeNode* setMeUp){
+    numberOfNodes++;
     setMeUp->child_exists = 0;
     setMeUp->prefix_exists = 0;
     setMeUp->next_hop_arr = (char*) malloc(sizeof(char) * 15);
@@ -49,7 +54,15 @@ TreeNode* constructTreeBitmap(struct TABLEENTRY* table, int tablelength){
 
 int main(){
     int tablelength;
+    uint64_t start, end;
+    start = rdtsc();
     struct TABLEENTRY* table = set_table("ipv4/ipv4_rrc_all_90build.txt", &tablelength);
+    end = rdtsc();
+    printf("Elapsed clock cycles for building the table: %d\n", end-start);
+    start = rdtsc();
     constructTreeBitmap(table, tablelength);
+    end = rdtsc();
+    printf("Elapsed clock cycles for building the TreeBitmap: %d\n", end-start);
+    printf("Clock cycles per node added: %f\n", (end-start)/(double)numberOfNodes);
     return 0;
 }
