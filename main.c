@@ -6,7 +6,7 @@
 typedef struct TreeNode {
     uint16_t child_exists;
     uint16_t prefix_exists;
-    uint32_t* next_hop_arr;
+    char* next_hop_arr;
     struct TreeNode* child_block;
 } TreeNode;
 
@@ -20,7 +20,14 @@ void setupNode(TreeNode* setMeUp){
 TreeNode* constructTreeBitmap(struct TABLEENTRY* table, int tablelength){
     TreeNode* root = (TreeNode*) malloc(sizeof(TreeNode));
     setupNode(root);
-    
+    for(int i = 0; i < tablelength; i++){
+        TreeNode* currentNode = root;
+        uint16_t remaining_prefix = table[i].ip & 0xFFFF;
+        int remaining_length = table[i].len - 16;
+        int current_first_four_bits = (remaining_prefix & 0xF000) >> 12;
+        
+
+    }
     return root;
 }
 
