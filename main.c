@@ -10,8 +10,14 @@ typedef struct TreeNode {
     struct TreeNode* childblock;
 } TreeNode;
 
+TreeNode* constructTreeBitmap(struct TABLEENTRY* table, int tablelength){
+    printf("%d", tablelength);
+}
+
+
 int main(){
-    struct TABLEENTRY* table = set_table("ipv4/ipv4_rrc_all_90build.txt");
-    
+    int tablelength;
+    struct TABLEENTRY* table = set_table("ipv4/ipv4_rrc_all_90build.txt", &tablelength);
+    constructTreeBitmap(table, tablelength);
     return 0;
 }

@@ -4,9 +4,9 @@
 #include <string.h>
 
 struct TABLEENTRY{
-	uint32_t ip;
-	uint8_t len;
-	uint8_t port;
+	unsigned int ip;
+	unsigned char len;
+	unsigned char nexthop;
 };
 
 void read_table(char *str,unsigned int *ip,int *len,unsigned int *nexthop){
@@ -46,29 +46,25 @@ void read_table(char *str,unsigned int *ip,int *len,unsigned int *nexthop){
 	*ip+=n[3];
 }
 
-struct TABLEENTRY* set_table(char *file_name){
+struct TABLEENTRY* set_table(char *file_name, int* num_entry){
 	FILE *fp;
-    int num_entry = 0, less16=0, equal16=0;
+    *num_entry = 0;
 	int len;
 	char string[100];
 	uint32_t ip,nexthop;
 	fp=fopen(file_name,"r");
 	while(fgets(string,50,fp)!=NULL){
 		read_table(string,&ip,&len,&nexthop);
-		num_entry++;
+		(*num_entry)++;
 	}
 	rewind(fp);
-	struct TABLEENTRY* table = (struct TABLEENTRY *)malloc(num_entry*sizeof(struct TABLEENTRY));
-	num_entry=0;
+	struct TABLEENTRY* table = (struct TABLEENTRY *)malloc((*num_entry)*sizeof(struct TABLEENTRY));
+	*num_entry=0;
 	while(fgets(string,50,fp)!=NULL){
 		read_table(string,&ip,&len,&nexthop);
-		if(len<16)
-			less16++;
-		else if(len==16)
-			equal16++;
-		table[num_entry].ip=ip;
-		table[num_entry].port=nexthop;
-		table[num_entry++].len=len;
+		table[*num_entry].ip=ip;
+		table[*num_entry].nexthop=nexthop;
+		table[(*num_entry)++].len=len;
 	}
     return table;
 }
