@@ -24,6 +24,7 @@ TreeNode* constructTreeBitmap(struct TABLEENTRY* table, int tablelength){
         TreeNode* currentNode = root;
         uint16_t remaining_prefix = table[i].ip & 0xFFFF;
         int remaining_length = table[i].len - 16;
+        if(remaining_length < 1) continue; //skip the troublemakers
         int current_first_four_bits = (remaining_prefix & 0xF000) >> 12;
         while(remaining_length > 4){
             if(!((currentNode->child_exists >> current_first_four_bits) & 1)){ //child doesn't exist yet?
