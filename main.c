@@ -25,8 +25,21 @@ TreeNode* constructTreeBitmap(struct TABLEENTRY* table, int tablelength){
         uint16_t remaining_prefix = table[i].ip & 0xFFFF;
         int remaining_length = table[i].len - 16;
         int current_first_four_bits = (remaining_prefix & 0xF000) >> 12;
-        
-
+        while(remaining_length > 4){
+            if(!((currentNode->child_exists >> current_first_four_bits) & 1)){ //child doesn't exist yet?
+                currentNode->child_exists |= (1 << current_first_four_bits); //set bit at corresponding position to indicate child now exists
+                setupNode(currentNode->child_block + current_first_four_bits);
+            }
+            currentNode = currentNode->child_block + current_first_four_bits;
+            remaining_prefix = remaining_prefix << 4;
+            remaining_length -= 4;
+            current_first_four_bits = (remaining_prefix & 0xF000) >> 12;
+        }
+        //arrived at final node where nexthop info needs to be stored.
+        int remainder_bits = (current_first_four_bits) >> (4 - remaining_length);
+        int pos = (1 << remaining_length) - 1 + remainder_bits; //2^remaining_length - 1 equals the amount of classes of lower length
+        currentNode->prefix_exists |= (1 << pos); //set bit at position to indicate prefix stored
+        currentNode->next_hop_arr[pos] = table[i].nexthop; //make actual entry
     }
     return root;
 }
