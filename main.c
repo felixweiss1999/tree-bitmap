@@ -151,5 +151,5 @@ int main(){
     end = rdtsc();
     printf("Elapsed clock cycles for table compression: %d\n", end-start);
     printf("Clock cycles per node: %f\n", (end-start)/(double)numberOfNodes);
-    return 0;
+    return 0; 
 }
