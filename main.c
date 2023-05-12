@@ -91,6 +91,35 @@ void compressNode(TreeNode* node){
     }
 }
 
+int searchPrefixBitmap(uint32_t prefix_exists, char byte){
+    int pos;
+    for(int r = 3; r >= 0; r--){
+        pos = (1 << r) - 1 + byte;
+        if((prefix_exists >> pos) & 1)
+            return pos;
+        byte = byte >> 1;
+    }
+    return -1;
+}
+
+int countSetBitsUpToP(uint16_t num, int p) { //not including position p!
+    int count = 0;
+    uint16_t mask = 1;
+    
+    for (int i = 0; i < p; i++) {
+        if (num & mask) {
+            count++;
+        }
+        mask <<= 1;
+    }
+    
+    return count;
+}
+
+void lookupIP(TreeNode* root, uint32_t ip){
+    
+}
+
 int main(){
     int tablelength;
     uint64_t start, end;
@@ -101,7 +130,7 @@ int main(){
     start = rdtsc();
     TreeNode* root = constructTreeBitmap(table, tablelength);
     end = rdtsc();
-    printf("Elapsed clock cycles for building the TreeBitmap: %d with %d nodes.\n", end-start, numberOfNodes);
+    printf("Elapsed clock cycles for building the (uncompressed) TreeBitmap: %d with %d nodes.\n", end-start, numberOfNodes);
     printf("Clock cycles per node added: %f\n", (end-start)/(double)numberOfNodes);
     start = rdtsc();
     compressNode(root);
