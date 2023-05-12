@@ -116,8 +116,22 @@ int countSetBitsUpToP(uint16_t num, int p) { //not including position p!
     return count;
 }
 
-void lookupIP(TreeNode* root, uint32_t ip){
-    
+char lookupIP(TreeNode* node, uint32_t ip){
+    char* longestMatch = NULL;
+    while(1){
+        char first_four_bits = (ip >> 28);
+        //check internal bitmap
+        int pos = searchPrefixBitmap(node->prefix_exists, first_four_bits >> 1); //expects only last 3 bits to be relevant
+        if(pos != -1){
+            longestMatch = node->next_hop_arr + countSetBitsUpToP(node->prefix_exists, pos); //now points to best known next hop
+        }
+        //check external bitmap
+        if(!((node->child_exists >> first_four_bits) & 1)) //there is no valid child potentially storing longer matching prefixes!
+            return *longestMatch;
+
+        node = node->child_block + countSetBitsUpToP(node->child_exists, first_four_bits);
+        ip = ip << 4;
+    }
 }
 
 int main(){
