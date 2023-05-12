@@ -70,8 +70,6 @@ void compressNode(TreeNode* node){
             new_next_hop_arr[q++] = node->next_hop_arr[i];
         }
     }
-    
-    
     free(node->next_hop_arr);
     node->next_hop_arr = new_next_hop_arr;
 
