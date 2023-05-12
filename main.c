@@ -103,6 +103,10 @@ int main(){
     end = rdtsc();
     printf("Elapsed clock cycles for building the TreeBitmap: %d with %d nodes.\n", end-start, numberOfNodes);
     printf("Clock cycles per node added: %f\n", (end-start)/(double)numberOfNodes);
+    start = rdtsc();
     compressNode(root);
+    end = rdtsc();
+    printf("Elapsed clock cycles for table compression: %d\n", end-start);
+    printf("Clock cycles per node: %f\n", (end-start)/(double)numberOfNodes);
     return 0;
 }
