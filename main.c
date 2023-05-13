@@ -15,6 +15,7 @@ int countSetBits(uint16_t num) {
 
 
 int numberOfNodes = 0;
+int numberOfNextHopsStored = 0;
 
 typedef struct TreeNode {
     uint16_t child_exists;
@@ -31,9 +32,7 @@ void setupNode(TreeNode* setMeUp){
     setMeUp->child_block = (TreeNode*) malloc(sizeof(TreeNode) * 16);
 }
 
-TreeNode* constructTreeBitmap(struct TABLEENTRY* table, int tablelength){
-    TreeNode* root = (TreeNode*) malloc(sizeof(TreeNode));
-    setupNode(root);
+TreeNode* constructTreeBitmap(TreeNode* root, struct TABLEENTRY* table, int tablelength){
     for(int i = 0; i < tablelength; i++){
         TreeNode* currentNode = root;
         uint16_t remaining_prefix = table[i].ip & 0xFFFF;
@@ -63,6 +62,7 @@ TreeNode* constructTreeBitmap(struct TABLEENTRY* table, int tablelength){
 void compressNode(TreeNode* node){
     //compress next hop info
     int count = countSetBits(node->prefix_exists);
+    numberOfNextHopsStored += count;
     char* new_next_hop_arr = (char*) malloc(sizeof(char) * count);
     int q = 0;
     for (int i = 0; i < 16; i++) {
@@ -116,20 +116,27 @@ int countSetBitsUpToP(uint16_t num, int p) { //not including position p!
     return count;
 }
 
-unsigned char lookupIP(TreeNode* node, uint32_t ip){
+unsigned char* lookupIP(TreeNode* node, uint32_t ip){
     unsigned char* longestMatch = NULL;
+
     while(1){
+
         char first_four_bits = (ip >> 28);
         //check internal bitmap
+
         int pos = searchPrefixBitmap(node->prefix_exists, first_four_bits >> 1); //expects only last 3 bits to be relevant
+
+
         if(pos != -1){
             longestMatch = node->next_hop_arr + countSetBitsUpToP(node->prefix_exists, pos); //now points to best known next hop
         }
         //check external bitmap
         if(!((node->child_exists >> first_four_bits) & 1)) //there is no valid child potentially storing longer matching prefixes!
-            return *longestMatch;
+            return longestMatch;
 
         node = node->child_block + countSetBitsUpToP(node->child_exists, first_four_bits);
+
+
         ip = ip << 4;
     }
 }
@@ -137,20 +144,52 @@ unsigned char lookupIP(TreeNode* node, uint32_t ip){
 int main(){
     int tablelength;
     uint64_t start, end;
+    TreeNode* root = (TreeNode*) malloc(sizeof(TreeNode));
+    setupNode(root);
+    //build
     start = rdtsc();
     struct TABLEENTRY* table = set_table("ipv4/ipv4_rrc_all_90build.txt", &tablelength);
     end = rdtsc();
     printf("Elapsed clock cycles for building the table: %d\n", end-start);
     start = rdtsc();
-    TreeNode* root = constructTreeBitmap(table, tablelength);
+    root = constructTreeBitmap(root, table, tablelength);
     end = rdtsc();
     printf("Elapsed clock cycles for building the (uncompressed) TreeBitmap: %d with %d nodes.\n", end-start, numberOfNodes);
-    printf("Clock cycles per node added: %f\n", (end-start)/(double)numberOfNodes);
+    printf("Clock cycles per node: %f\n", (end-start)/(double)numberOfNodes);
+    printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)tablelength);
+    //insert
+    table = set_table("ipv4/ipv4_rrc_all_10insert.txt", &tablelength);
+    start = rdtsc();
+    root = constructTreeBitmap(root, table, tablelength);
+    end = rdtsc();
+    printf("Elapsed clock cycles for inserting: %d with %d nodes.\n", end-start, numberOfNodes);
+    printf("Clock cycles per insert: %f\n", (end-start)/(double)tablelength);
+    //compress
     start = rdtsc();
     compressNode(root);
     end = rdtsc();
     printf("Elapsed clock cycles for table compression: %d\n", end-start);
-    printf("Clock cycles per node: %f\n", (end-start)/(double)numberOfNodes);
-    lookupIP(root, 3132185600);
+    printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)tablelength);
+    printf("Total nexthops stored: %d\n", numberOfNextHopsStored);
+    //query
+    uint64_t totalclock = 0;
+    int maxclock = 0;
+    int minclock = 1000000000;
+    uint32_t* query_table = set_query_table("ipv4/ipv4_rrc_all_10insert.txt", &tablelength);
+    for(int i = 0; i < tablelength; i++){
+        start = rdtsc();
+        unsigned char* nexthop = lookupIP(root, query_table[i]);
+        end = rdtsc();
+        totalclock += end-start;
+        if((end-start) > maxclock){
+            //printf("maxclock %d for i=%d nexthop=%d t1=%llu t2=%llu iters=%llu\n", end-start, i, *nexthop, timestamp, timestamp2, iters);
+            maxclock = end-start;
+        }
+        if((end-start) < minclock)
+            minclock = end-start;
+    }
+    printf("Average clocks per lookup: %f\n", totalclock/(double)tablelength);
+    printf("Maxclock: %d Minclock: %d\n", maxclock, minclock);
+    printf("%d", sizeof(TreeNode));
     return 0;
 }
