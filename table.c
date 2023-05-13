@@ -68,3 +68,23 @@ struct TABLEENTRY* set_table(char *file_name, int* num_entry){
 	}
     return table;
 }
+
+unsigned int* set_query_table(char *file_name, int* num_entry){
+	FILE *fp;
+	int len;
+	char string[100];
+	unsigned int ip,nexthop;
+	fp=fopen(file_name,"r");
+	while(fgets(string,50,fp)!=NULL){
+		read_table(string,&ip,&len,&nexthop);
+		*num_entry++;
+	}
+	rewind(fp);
+	unsigned int* query = (unsigned int*) malloc(*num_entry*sizeof(unsigned int));
+	*num_entry=0;
+	while(fgets(string,50,fp)!=NULL){
+		read_table(string,&ip,&len,&nexthop);
+        query[*num_entry] = ip;
+	}
+	return query;
+}

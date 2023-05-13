@@ -116,8 +116,8 @@ int countSetBitsUpToP(uint16_t num, int p) { //not including position p!
     return count;
 }
 
-char lookupIP(TreeNode* node, uint32_t ip){
-    char* longestMatch = NULL;
+unsigned char lookupIP(TreeNode* node, uint32_t ip){
+    unsigned char* longestMatch = NULL;
     while(1){
         char first_four_bits = (ip >> 28);
         //check internal bitmap
@@ -151,5 +151,6 @@ int main(){
     end = rdtsc();
     printf("Elapsed clock cycles for table compression: %d\n", end-start);
     printf("Clock cycles per node: %f\n", (end-start)/(double)numberOfNodes);
+    lookupIP(root, 3132185600);
     return 0;
 }
