@@ -32,22 +32,37 @@ void setupNode(TreeNode* setMeUp){
     setMeUp->child_block = (TreeNode*) malloc(sizeof(TreeNode) * 16);
 }
 
+unsigned char extract_shift_decrement4(uint32_t* prefix, uint32_t* remainingLength) {
+    unsigned int mask = 0xFFFFFFFF;  // Mask to extract all bits
+    unsigned char ret;
+    if ((*remainingLength) < 4) {
+        mask = (0xF0000000 << (4 - (*remainingLength)));  // Update the mask based on remaining length
+        *prefix = (*prefix) << (*remainingLength);
+        ret = ((*prefix) & mask) >> (32 - (*remainingLength));
+        (*remainingLength) = 0;
+    } else {
+        mask = (0xF0000000);
+        *prefix = (*prefix) << 4;
+        ret = ((*prefix) & mask) >> 28;
+        (*remainingLength) -= 4;
+    }
+    return ret;
+}
+
+
 TreeNode* constructTreeBitmap(TreeNode* root, struct TABLEENTRY* table, int tablelength){
     for(int i = 0; i < tablelength; i++){
         TreeNode* currentNode = root;
-        uint16_t remaining_prefix = table[i].ip & 0xFFFF;
-        int remaining_length = (int)table[i].len - 16;
-        if(remaining_length < 1) continue; //skip the troublemakers
-        int current_first_four_bits = (remaining_prefix & 0xF000) >> 12;
+        uint32_t remaining_prefix = table[i].ip;
+        int remaining_length = (int)table[i].len;
+        unsigned char current_first_four_bits = extract_shift_decrement4(&remaining_prefix, &remaining_length);
         while(remaining_length > 3){
             if(!((currentNode->child_exists >> current_first_four_bits) & 1)){ //child doesn't exist yet?
                 currentNode->child_exists |= (1 << current_first_four_bits); //set bit at corresponding position to indicate child now exists
                 setupNode(currentNode->child_block + current_first_four_bits);
             }
             currentNode = currentNode->child_block + current_first_four_bits;
-            remaining_prefix = remaining_prefix << 4;
-            remaining_length -= 4;
-            current_first_four_bits = (remaining_prefix & 0xF000) >> 12;
+            current_first_four_bits = extract_shift_decrement4(&remaining_prefix, &remaining_length);
         }
         //arrived at final node where nexthop info needs to be stored.
         int remainder_bits = (current_first_four_bits) >> (4 - remaining_length);
@@ -63,27 +78,32 @@ void compressNode(TreeNode* node){
     //compress next hop info
     int count = countSetBits(node->prefix_exists);
     numberOfNextHopsStored += count;
-    char* new_next_hop_arr = (char*) malloc(sizeof(char) * count);
-    int q = 0;
-    for (int i = 0; i < 16; i++) {
-        if ((node->prefix_exists >> i) & 1) {
-            new_next_hop_arr[q++] = node->next_hop_arr[i];
+    if(count < 15){
+        char* new_next_hop_arr = (char*) malloc(sizeof(char) * count);
+        int q = 0;
+        for (int i = 0; i < 16; i++) {
+            if ((node->prefix_exists >> i) & 1) {
+                new_next_hop_arr[q++] = node->next_hop_arr[i];
+            }
         }
+        free(node->next_hop_arr);
+        node->next_hop_arr = new_next_hop_arr;
     }
-    free(node->next_hop_arr);
-    node->next_hop_arr = new_next_hop_arr;
-
+    
     //compress child block
     count = countSetBits(node->child_exists);
-    TreeNode* new_child_block = (TreeNode*) malloc(sizeof(TreeNode) * count);
-    q = 0;
-    for (int i = 0; i < 16; i++) {
-        if ((node->child_exists >> i) & 1) {
-            new_child_block[q++] = node->child_block[i];
+    if(count < 16){
+        TreeNode* new_child_block = (TreeNode*) malloc(sizeof(TreeNode) * count);
+        int q = 0;
+        for (int i = 0; i < 16; i++) {
+            if ((node->child_exists >> i) & 1) {
+                new_child_block[q++] = node->child_block[i];
+            }
         }
+        free(node->child_block);
+        node->child_block = new_child_block;
     }
-    free(node->child_block);
-    node->child_block = new_child_block;
+    
 
     //recurse over compressed childblock
     for(int i = 0; i < count; i++){
@@ -151,12 +171,19 @@ int main(){
     struct TABLEENTRY* table = set_table("ipv4/ipv4_rrc_all_90build.txt", &tablelength);
     end = rdtsc();
     printf("Elapsed clock cycles for building the table: %d\n", end-start);
+    
+
+
+
     start = rdtsc();
     root = constructTreeBitmap(root, table, tablelength);
     end = rdtsc();
     printf("Elapsed clock cycles for building the (uncompressed) TreeBitmap: %d with %d nodes.\n", end-start, numberOfNodes);
     printf("Clock cycles per node: %f\n", (end-start)/(double)numberOfNodes);
     printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)tablelength);
+    
+    
+    
     //insert
     table = set_table("ipv4/ipv4_rrc_all_10insert.txt", &tablelength);
     start = rdtsc();
@@ -164,6 +191,9 @@ int main(){
     end = rdtsc();
     printf("Elapsed clock cycles for inserting: %d with %d nodes.\n", end-start, numberOfNodes);
     printf("Clock cycles per insert: %f\n", (end-start)/(double)tablelength);
+    
+    
+    
     //compress
     start = rdtsc();
     compressNode(root);
@@ -171,6 +201,9 @@ int main(){
     printf("Elapsed clock cycles for table compression: %d\n", end-start);
     printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)tablelength);
     printf("Total nexthops stored: %d\n", numberOfNextHopsStored);
+    
+    return 0;
+    
     //query
     uint64_t totalclock = 0;
     int maxclock = 0;
