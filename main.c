@@ -22,17 +22,14 @@ typedef struct TreeNode {
     uint16_t prefix_exists;
     char* next_hop_arr;
     struct TreeNode* child_block;
-    int verify;
-    int isCompressed;
 } TreeNode;
 
 void setupNode(TreeNode* setMeUp){
-    numberOfNodes++;
+    //numberOfNodes++;
     setMeUp->child_exists = 0;
     setMeUp->prefix_exists = 0;
     setMeUp->next_hop_arr = (char*) malloc(sizeof(char) * 15);
     setMeUp->child_block = (TreeNode*) malloc(sizeof(TreeNode) * 16);
-    setMeUp->verify = 12341234;
 }
 
 unsigned char extract_shift4(uint32_t* prefix, int remainingLength) {
@@ -54,23 +51,23 @@ unsigned char extract_shift4(uint32_t* prefix, int remainingLength) {
 TreeNode* constructTreeBitmap(TreeNode* root, struct TABLEENTRY* table, int tablelength){
     for(int i = 0; i < tablelength; i++){
         TreeNode* currentNode = root;
-        int depth = 0;
+        //int depth = 0;
         uint32_t remaining_prefix = table[i].ip;
         int remaining_length = table[i].len;
         unsigned char current_first_four_bits;
         while(remaining_length > 3){ // equivalent to needs another child
-            if(i < 4) currentNode->verify = i*100+depth;
+            //if(i < 4) currentNode->verify = i*100+depth;
             current_first_four_bits = extract_shift4(&remaining_prefix, remaining_length);
             if(!((currentNode->child_exists >> current_first_four_bits) & 1)){ //child doesn't exist yet?
                 currentNode->child_exists |= (1 << current_first_four_bits); //set bit at corresponding position to indicate child now exists
                 setupNode(currentNode->child_block + current_first_four_bits);
             }
-            depth++;
+            //depth++;
             remaining_length -= 4;
             currentNode = currentNode->child_block + current_first_four_bits;
         }
         current_first_four_bits = extract_shift4(&remaining_prefix, remaining_length);
-        if(i < 4) currentNode->verify = i*100+depth;
+        //if(i < 4) currentNode->verify = i*100+depth;
         //remaining_length = (remaining_length + 4) % 4; //maps 4 to 0!
         //if(remaining_length == 0) current_first_four_bits = 0; // special case where this needs to be 0 because length is 0 anyways
         int pos = (1 << remaining_length) - 1 + current_first_four_bits;
@@ -89,9 +86,9 @@ TreeNode* constructTreeBitmap(TreeNode* root, struct TABLEENTRY* table, int tabl
 
 void compressNode(TreeNode* node){
     //compress next hop info
-    if(node->verify >= 0 && node->verify <= 1000){
-        printf("gotem on compress %d\n", node->verify);
-    }
+    // if(node->verify >= 0 && node->verify <= 1000){
+    //     printf("gotem on compress %d\n", node->verify);
+    // }
     int count = countSetBits(node->prefix_exists);
     //numberOfNextHopsStored += count;
     if(count < 14 && count > 0){
@@ -100,9 +97,9 @@ void compressNode(TreeNode* node){
         for (int i = 0; i < 15; i++) {
             if ((node->prefix_exists >> i) & 1) {
                 new_next_hop_arr[q++] = node->next_hop_arr[i];
-                if(node->verify >= 0 && node->verify <= 1000){
-                    printf("On compressing %d: copied prefix %d from pos %d into pos %d\n", node->verify, new_next_hop_arr[q-1], i, q-1);
-                }
+                // if(node->verify >= 0 && node->verify <= 1000){
+                //     printf("On compressing %d: copied prefix %d from pos %d into pos %d\n", node->verify, new_next_hop_arr[q-1], i, q-1);
+                // }
             }
         }
         //if(count != q)printf("Warning!");
@@ -119,9 +116,9 @@ void compressNode(TreeNode* node){
         for (int i = 0; i < 16; i++) {
             if ((node->child_exists >> i) & 1) {
                 new_child_block[q++] = node->child_block[i];
-                if(node->child_block[i].verify >= 0 && node->child_block[i].verify <= 1000){
-                    printf("On compressing %d: copied child block %d from pos %d into pos %d\n", node->verify,new_child_block[q-1].verify, i, q-1);
-                }
+                // if(node->child_block[i].verify >= 0 && node->child_block[i].verify <= 1000){
+                //     printf("On compressing %d: copied child block %d from pos %d into pos %d\n", node->verify,new_child_block[q-1].verify, i, q-1);
+                // }
             }
         }
         //if(count != q)printf("Warning!");
@@ -183,6 +180,8 @@ unsigned char* lookupIP(TreeNode* node, uint32_t ip, int remaining_len){
             pos = (1 << remaining_len) - 1 + first_four_bits; //first_four_bits really is first 0 to 3 bits
             if(node->prefix_exists & (1 << pos) == 0){
                 pos = -1;
+            } else {
+                return node->next_hop_arr + countSetBitsUpToP(node->prefix_exists, pos);
             }
         }
         // if(remaining_len < 0){
@@ -274,6 +273,8 @@ int main(){
     }
     printf("Average clocks per lookup: %f\n", totalclock/(double)tablelength1);
     printf("Maxclock: %d Minclock: %d\n", maxclock, minclock);
-    printf("%d", sizeof(TreeNode));
+    printf("Size of Treenode: %d", sizeof(TreeNode));
+    printf("Length of table 1: %d", tablelength1);
+
     return 0;
 }
