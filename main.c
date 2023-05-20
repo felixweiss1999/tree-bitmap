@@ -58,20 +58,21 @@ TreeNode* constructTreeBitmap(TreeNode* root, struct TABLEENTRY* table, int tabl
         uint32_t remaining_prefix = table[i].ip;
         int remaining_length = table[i].len;
         unsigned char current_first_four_bits;
-        while(remaining_length > 0){
+        while(remaining_length > 3){ // equivalent to needs another child
             if(i < 4) currentNode->verify = i*100+depth;
             current_first_four_bits = extract_shift4(&remaining_prefix, remaining_length);
-            remaining_length -= 4;
             if(!((currentNode->child_exists >> current_first_four_bits) & 1)){ //child doesn't exist yet?
                 currentNode->child_exists |= (1 << current_first_four_bits); //set bit at corresponding position to indicate child now exists
                 setupNode(currentNode->child_block + current_first_four_bits);
             }
             depth++;
+            remaining_length -= 4;
             currentNode = currentNode->child_block + current_first_four_bits;
         }
+        current_first_four_bits = extract_shift4(&remaining_prefix, remaining_length);
         if(i < 4) currentNode->verify = i*100+depth;
-        remaining_length = (remaining_length + 4) % 4; //maps 4 to 0!
-        if(remaining_length == 0) current_first_four_bits = 0; // special case where this needs to be 0 because length is 0 anyways
+        //remaining_length = (remaining_length + 4) % 4; //maps 4 to 0!
+        //if(remaining_length == 0) current_first_four_bits = 0; // special case where this needs to be 0 because length is 0 anyways
         int pos = (1 << remaining_length) - 1 + current_first_four_bits;
         // printf("saving entry %d at depth %d with nexthop %d at position %d\n", i, depth, table[i].nexthop, pos);
         // if(currentNode->prefix_exists & (1 << pos)){
@@ -164,23 +165,21 @@ unsigned char* lookupIP(TreeNode* node, uint32_t ip, int remaining_len){
     unsigned char* longestMatch = NULL;
 
     while(1){
-        if(node->verify >= 0 && node->verify <= 1000){
-            printf("got %d on lookup\n", node->verify);
-        }else{
-            printf("no: verify = %d", node->verify);
-        }
+        // if(node->verify >= 0 && node->verify <= 1000){
+        //     printf("got %d on lookup\n", node->verify);
+        // }else{
+        //     printf("no: verify = %d", node->verify);
+        // }
         unsigned char first_four_bits;
         int pos;
-        if(remaining_len >= 4){
+        if(remaining_len > 3){ //needs another child
             first_four_bits = (ip >> 28);
             ip = ip << 4;
             remaining_len -= 4;
             pos = searchPrefixBitmap(node->prefix_exists, first_four_bits >> 1); //expects only last 3 bits to be relevant
-        } 
-        
-        if(remaining_len >= 0 && remaining_len < 4){
+        } else { //arrived at child holding next hop
             first_four_bits = (ip >> (32-remaining_len)); //32 -rem
-            ip = ip << remaining_len;
+            //ip = ip << remaining_len;
             pos = (1 << remaining_len) - 1 + first_four_bits; //first_four_bits really is first 0 to 3 bits
             if(node->prefix_exists & (1 << pos) == 0){
                 pos = -1;
@@ -258,12 +257,13 @@ int main(){
     uint64_t totalclock = 0;
     int maxclock = 0;
     int minclock = 1000000000;
-    uint32_t* query_table = set_query_table("ipv4/build.txt", &tablelength2);
-    for(int i = 0; i < 4; i++){
+    //uint32_t* query_table = set_query_table("ipv4/build.txt", &tablelength2);
+    for(int i = 0; i < tablelength1/2; i++){
         start = rdtsc();
         unsigned char* nexthop = lookupIP(root, table[i].ip, table[i].len);
-        printf("retrieved %d\n", *nexthop);
+        //printf("retrieved %d\n", *nexthop);
         end = rdtsc();
+        if(end-start > 3000)continue;
         totalclock += end-start;
         if((end-start) > maxclock){
             //printf("maxclock %d for i=%d nexthop=%d t1=%llu t2=%llu iters=%llu\n", end-start, i, *nexthop, timestamp, timestamp2, iters);
@@ -272,7 +272,7 @@ int main(){
         if((end-start) < minclock)
             minclock = end-start;
     }
-    printf("Average clocks per lookup: %f\n", totalclock/(double)tablelength2);
+    printf("Average clocks per lookup: %f\n", totalclock/(double)tablelength1);
     printf("Maxclock: %d Minclock: %d\n", maxclock, minclock);
     printf("%d", sizeof(TreeNode));
     return 0;
