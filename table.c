@@ -133,9 +133,9 @@ unsigned char* getIPv6AddressChunks(const struct AddressEntry* addresses, int in
     return address_chunks;
 }
 
-struct AddressEntry* read_ipv6_table(char* filename){
-    int num_addresses = countLines(filename);
-    struct AddressEntry* addresses = (struct AddressEntry*) malloc(sizeof(struct AddressEntry) * num_addresses);
+struct AddressEntry* read_ipv6_table(char* filename, int* num_addresses){
+    *num_addresses = countLines(filename);
+    struct AddressEntry* addresses = (struct AddressEntry*) malloc(sizeof(struct AddressEntry) * (*num_addresses));
     // Open the file
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
@@ -146,7 +146,7 @@ struct AddressEntry* read_ipv6_table(char* filename){
     // Read addresses from the file
     char line[500];
     int index = 0;
-    while (fgets(line, sizeof(line), file) != NULL && index < num_addresses) {
+    while (fgets(line, sizeof(line), file) != NULL && index < (*num_addresses)) {
         line[strcspn(line, "\n")] = '\0';  // Remove the newline character
 
         // Parse the address and subnet mask

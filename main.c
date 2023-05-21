@@ -25,7 +25,7 @@ typedef struct TreeNode {
 } TreeNode;
 
 void setupNode(TreeNode* setMeUp){
-    //numberOfNodes++;
+    numberOfNodes++;
     setMeUp->child_exists = 0;
     setMeUp->prefix_exists = 0;
     setMeUp->next_hop_arr = (char*) malloc(sizeof(char) * 15);
@@ -198,10 +198,7 @@ unsigned char* lookupIP(TreeNode* node, uint32_t ip, int remaining_len){
         //check external bitmap
         if(!((node->child_exists >> first_four_bits) & 1)) //there is no valid child potentially storing longer matching prefixes!
             return longestMatch;
-        int a = countSetBitsUpToP(node->child_exists, first_four_bits);
-        // if((node->child_block + countSetBitsUpToP(node->child_exists, first_four_bits))->verify != 12341234){
-        //     printf("warning");
-        // }
+        
         node = node->child_block + countSetBitsUpToP(node->child_exists, first_four_bits);
         
 
@@ -210,24 +207,116 @@ unsigned char* lookupIP(TreeNode* node, uint32_t ip, int remaining_len){
 }
 
 
-int main(){
+TreeNode* constructIpv6TreeBitmap(TreeNode* root, struct AddressEntry* table, int tablelength){
+    unsigned char* address_chunks = (unsigned char*) malloc(sizeof(unsigned char) * 32);
+    for(int i = 0; i < tablelength; i++){
+        getIPv6AddressChunks(table, i, address_chunks);
+        TreeNode* currentNode = root;
+        int remaining_length = table[i].subnet_mask;
+        int j = 0;
+        unsigned char current_first_four_bits;
+        while(remaining_length > 3){
+            current_first_four_bits = address_chunks[j++];
+            if(!((currentNode->child_exists >> current_first_four_bits) & 1)){
+                currentNode->child_exists |= (1 << current_first_four_bits);
+                setupNode(currentNode->child_block + current_first_four_bits);
+            }
+            remaining_length -= 4;
+            currentNode = currentNode->child_block + current_first_four_bits;
+        }
+        current_first_four_bits = address_chunks[j] >> (4-remaining_length);
+        int pos = (1 << remaining_length) - 1 + current_first_four_bits;
+
+        currentNode->prefix_exists |= (1 << pos);
+        currentNode->next_hop_arr[pos] = (unsigned char) i;
+    }
+    free(address_chunks);
+    return root;
+}
+
+unsigned char* lookupIPv6(TreeNode* node, unsigned char* addr_chnks, int remaining_len){
+    unsigned char* longestMatch = NULL;
+    int q = 0;
+    while(1){
+        unsigned char first_four_bits;
+        int pos;
+        if(remaining_len > 3){ //needs another child
+            first_four_bits = addr_chnks[q++];
+            remaining_len -= 4;
+            pos = searchPrefixBitmap(node->prefix_exists, first_four_bits >> 1);
+        } else {
+            first_four_bits = addr_chnks[q] >> (4-remaining_len);
+            pos = (1 << remaining_len) - 1 + first_four_bits;
+            return node->next_hop_arr + countSetBitsUpToP(node->prefix_exists, pos);
+
+        }
+
+        if(pos != -1){
+            longestMatch = node->next_hop_arr + countSetBitsUpToP(node->prefix_exists, pos); //now points to best known next hop
+        }
+        //check external bitmap
+        if(!((node->child_exists >> first_four_bits) & 1))
+            return longestMatch;
+        //int a = countSetBitsUpToP(node->child_exists, first_four_bits);
+        node = node->child_block + countSetBitsUpToP(node->child_exists, first_four_bits);
+    }
+}
+
+int mainipv6(){
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         printf("Failed to initialize Winsock.\n");
         return 1;
     }
-    struct AddressEntry* addresses = read_ipv6_table("ipv6/ipv6_rrc_90build.txt");
-    unsigned char* address_chunks = (unsigned char*) malloc(sizeof(unsigned char) * 32);
-    getIPv6AddressChunks(addresses, 0, address_chunks);
-    if (address_chunks != NULL) {
-        printf("IPv6 Address Chunks: ");
-        for (int i = 0; i < 32; i++) {
-            printf("%x", address_chunks[i]);
-        }
-        printf("\n");
 
-        free(address_chunks);
+    int tablelength1;
+    uint64_t start, end;
+    TreeNode* root = (TreeNode*) malloc(sizeof(TreeNode));
+    setupNode(root);
+    //build
+    start = rdtsc();
+    struct AddressEntry* table = read_ipv6_table("ipv6/ipv6_rrc_90build.txt", &tablelength1);
+    end = rdtsc();
+    printf("%llu clocks: Build Table\n", end-start);
+
+    //construct
+    start = rdtsc();
+    root = constructIpv6TreeBitmap(root, table, tablelength1);
+    end = rdtsc();
+    printf("%llu clocks: Build TreeBitmap with %d nodes storing %d entries\n", end-start, numberOfNodes, tablelength1);
+    printf("Clocks per node: %f\n", (end-start)/(double)numberOfNodes);
+    printf("Clocks per prefix: %f\n", (end-start)/(double)tablelength1);
+    
+    //compress
+    compressNode(root);
+
+    //query
+    uint64_t totalclock = 0;
+    int maxclock = 0;
+    int minclock = 1000000000;
+    uint64_t* clocks = (uint64_t*) malloc(sizeof(uint64_t) * tablelength1);
+    unsigned char* address_chunks = (unsigned char*) malloc(32);
+    for(int i = 0; i < tablelength1; i++){
+        start = rdtsc();
+        unsigned char* nexthop = lookupIPv6(root, getIPv6AddressChunks(table, i, address_chunks), table[i].subnet_mask);
+        end = rdtsc();
+        //printf("retrieved %u\n", *nexthop);
+        clocks[i] = end-start;
+        totalclock += end-start;
+        if((end-start) > maxclock){
+            //printf("maxclock %d for i=%d nexthop=%d t1=%llu t2=%llu iters=%llu\n", end-start, i, *nexthop, timestamp, timestamp2, iters);
+            maxclock = end-start;
+        }
+        if((end-start) < minclock)
+            minclock = end-start;
     }
+    printf("Average clocks per lookup: %f\n", totalclock/(double)(tablelength1));
+    printf("Maxclock: %d Minclock: %d\n", maxclock, minclock);
+    printf("Size of Treenode: %d\n", sizeof(TreeNode));
+    printf("Length of table 1: %d\n", tablelength1);
+    writeArrayToFile(clocks,tablelength1,"resultsIPv6.txt");
+
+
     WSACleanup();
     return 0;
 }
@@ -256,7 +345,7 @@ int main(){
 
 
 
-int mainipv4(){
+int main(){
     int tablelength1;
     uint64_t start, end;
     TreeNode* root = (TreeNode*) malloc(sizeof(TreeNode));
@@ -271,31 +360,31 @@ int mainipv4(){
 
     //tablelength1 = 10000;
     start = rdtsc();
-    root = constructTreeBitmap(root, table, tablelength1);
+    root = constructTreeBitmap(root, table, 100000);
     end = rdtsc();
     printf("Elapsed clock cycles for building the (uncompressed) TreeBitmap: %llu with %d nodes.\n", end-start, numberOfNodes);
     printf("Clock cycles per node: %f\n", (end-start)/(double)numberOfNodes);
-    printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)tablelength1);
+    printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)100000);
     // compressNode(root);
     // printf("retrieved: %d", *lookupIP(root, table[0].ip));
     // return 0;
    
     // //insert
-    int tablelength2;
-    struct TABLEENTRY* table2 = set_table("ipv4/ipv4_rrc_all_10insert.txt", &tablelength2);
-    start = rdtsc();
-    root = constructTreeBitmap(root, table2, tablelength2);
-    end = rdtsc();
-    printf("Elapsed clock cycles for inserting: %d with %d nodes.\n", end-start, numberOfNodes);
-    printf("Clock cycles per insert: %f\n", (end-start)/(double)tablelength2);
-    //int tablelength2 = 0;
+    // int tablelength2;
+    // struct TABLEENTRY* table2 = set_table("ipv4/ipv4_rrc_all_10insert.txt", &tablelength2);
+    // start = rdtsc();
+    // root = constructTreeBitmap(root, table2, tablelength2);
+    // end = rdtsc();
+    // printf("Elapsed clock cycles for inserting: %d with %d nodes.\n", end-start, numberOfNodes);
+    // printf("Clock cycles per insert: %f\n", (end-start)/(double)tablelength2);
+    int tablelength2 = 0;
     
     //compress
     start = rdtsc();
     compressNode(root);
     end = rdtsc();
     printf("Elapsed clock cycles for table compression: %d\n", end-start);
-    printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)(tablelength1+tablelength2));
+    printf("Clock cycles per prefix stored: %f\n", (end-start)/(double)(100000+tablelength2));
     printf("Total nexthops stored: %d\n", numberOfNextHopsStored);
     
     
@@ -305,7 +394,7 @@ int mainipv4(){
     int minclock = 1000000000;
     //uint32_t* query_table = set_query_table("ipv4/build.txt", &tablelength2);
     uint64_t* clocks = (uint64_t*) malloc(sizeof(uint64_t) * tablelength1);
-    for(int i = 0; i < tablelength1; i++){
+    for(int i = 0; i < 100000; i++){
         start = rdtsc();
         unsigned char* nexthop = lookupIP(root, table[i].ip, table[i].len);
         //printf("retrieved %d\n", *nexthop);
@@ -319,10 +408,10 @@ int mainipv4(){
         if((end-start) < minclock)
             minclock = end-start;
     }
-    printf("Average clocks per lookup: %f\n", totalclock/(double)(tablelength1));
+    printf("Average clocks per lookup: %f\n", totalclock/(double)(100000));
     printf("Maxclock: %d Minclock: %d\n", maxclock, minclock);
     printf("Size of Treenode: %d", sizeof(TreeNode));
-    printf("Length of table 1: %d", tablelength1);
-    writeArrayToFile(clocks,tablelength1,"results.txt");
+    printf("Length of table 1: %d", 100000);
+    //writeArrayToFile(clocks,tablelength1,"results.txt");
     return 0;
 }
