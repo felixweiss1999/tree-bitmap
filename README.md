@@ -1,5 +1,5 @@
 # tree-bitmap
-Implementation of a Tree Bitmap in C. Midterm project for 'High-Performance Router Architecture and Design' course at National Cheng Kung University.
+Implementation of a Tree Bitmap in C. Midterm project for 'High-Performance Router Architecture and Design' course at National Cheng Kung University, 2023.
 
 Implementation based on:
 
